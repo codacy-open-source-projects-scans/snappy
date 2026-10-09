@@ -53,17 +53,13 @@
 #define SNAPPY_HAVE_RVV 0
 #endif
 
-#ifdef SNAPPY_RVV_1
+#if SNAPPY_RVV_1 || SNAPPY_RVV_0_7
 #define VSETVL_E8M2 __riscv_vsetvl_e8m2
 #define VLE8_V_U8M2 __riscv_vle8_v_u8m2
 #define VSE8_V_U8M2 __riscv_vse8_v_u8m2
-#elif SNAPPY_RVV_0_7
-#define VSETVL_E8M2 vsetvl_e8m2
-#define VLE8_V_U8M2 vle8_v_u8m2
-#define VSE8_V_U8M2 vse8_v_u8m2
 #endif
 
-#if SNAPPY_HAVE_SSSE3 || SNAPPY_HAVE_NEON 
+#if SNAPPY_HAVE_SSSE3 || SNAPPY_HAVE_NEON
 #define SNAPPY_HAVE_VECTOR_BYTE_SHUFFLE 1
 #else
 #define SNAPPY_HAVE_VECTOR_BYTE_SHUFFLE 0
@@ -78,7 +74,7 @@ using V128 = __m128i;
 #elif SNAPPY_HAVE_NEON
 using V128 = uint8x16_t;
 #endif
- 
+
 // Load 128 bits of integer data. `src` must be 16-byte aligned.
 inline V128 V128_Load(const V128* src);
 
@@ -137,7 +133,15 @@ inline V128 V128_DupChar(char c) { return vdupq_n_u8(c); }
 class WorkingMemory {
  public:
   explicit WorkingMemory(size_t input_size);
+
+  // Non-allocating: lays out the scratch space in the caller-provided
+  // buffer, which must be at least RequiredSize(input_size) bytes, aligned
+  // at least as strictly as uint16_t, and must outlive "*this".
+  WorkingMemory(size_t input_size, char* buffer);
   ~WorkingMemory();
+
+  // The buffer size required by the non-allocating constructor above.
+  static size_t RequiredSize(size_t input_size);
 
   // Allocates and clears a hash table using memory in "*this",
   // stores the number of buckets in "*table_size" and returns a pointer to
@@ -149,6 +153,7 @@ class WorkingMemory {
  private:
   char* mem_;        // the allocated memory, never nullptr
   size_t size_;      // the size of the allocated memory, never 0
+  bool owns_mem_;
   uint16_t* table_;  // the pointer to the hashtable
   char* input_;      // the pointer to the input scratch buffer
   char* output_;     // the pointer to the output scratch buffer
@@ -194,7 +199,7 @@ char* CompressFragment(const char* input,
 // riscv and little-endian cpu choose this routinue can be done faster too.
 #if !SNAPPY_IS_BIG_ENDIAN && \
     (defined(__x86_64__) || defined(_M_X64) || defined(ARCH_PPC) || \
-     defined(ARCH_ARM) || defined(__riscv))
+     defined(__aarch64__) || (defined(__riscv) && (__riscv_xlen == 64)))
 static inline std::pair<size_t, bool> FindMatchLength(const char* s1,
                                                       const char* s2,
                                                       const char* s2_limit,

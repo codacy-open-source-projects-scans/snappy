@@ -306,6 +306,7 @@ class Bits {
 
 // In RISC-V,  CLZ  is supported by instructions from the ZBB bit-manipulation extension.
 #if HAVE_BUILTIN_CTZ
+
 inline int Bits::Log2FloorNonZero(uint32_t n) {
   assert(n != 0);
   // (31 ^ x) is equivalent to (31 - x) for x in [0, 31]. An easy proof
